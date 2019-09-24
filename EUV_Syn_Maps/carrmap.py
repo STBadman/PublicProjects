@@ -132,7 +132,7 @@ def plot_carr_map(lons,lats,values,sunpymaps=None,pcmax=90,pcmin=0,
 def time_string(dt) : return f"{dt.year}-{dt.month:02d}-{dt.day:02d}T{dt.hour:02d}:{dt.minute:02d}:{dt.second:02d}"
 
 def download_and_gen_carrmap(dt,resample_size=None) :
-    # Saves fits files to ~/sunpy/data
+	# Saves fits files to ~/sunpy/data
 	stereoA = (a.vso.Source('STEREO_A') &
 			  a.Instrument('EUVI') &
 			  a.Time(time_string(dt), time_string(dt+timedelta(minutes=60)))
@@ -230,14 +230,17 @@ def save_dat_over_date_range(dt_start,dt_end,interval_days=1,sav_def = "./data/"
 	pickle.dump((lon,lat,datas),file=open(f"{sav_def}{str(dt_start)[0:10]}_{str(dt_end)[0:10]}_{interval_days}.pkl","wb"))
 
 def combine_map(pickle_file,path="./data/",
-	            mode=np.nanmin,plot=False,ret=False,cmap='sdoaia193',sinelat=True) :	
+				mode=np.nanmin,plot=False,ret=False,cmap='sdoaia193',sinelat=True) :	
 	lon,lat,dat_dict=pickle.load(open(f"{path}{pickle_file}","rb"))
 	times = list(dat_dict.keys())
 	data_stack=np.array(list(dat_dict.values()))
 	combined = mode(data_stack,axis=0)
 	if plot :
-		plot_carr_map(lon,lat,mode(data_stack,axis=0),pcmax=90,sinelat=sinelat,cmap=cmap)
+		fig,ax=plt.subplots(figsize=(20,10))
+		plot_carr_map(lon,lat,mode(data_stack,axis=0),pcmax=90,sinelat=sinelat,
+					  cmap=cmap,figax=(fig,ax))
 		plt.title(f"{len(times)} maps from {str(times[0])[0:10]} to {str(times[0])[0:10]}",fontsize=20)
+		plt.show()
 	if ret : return lon,lat,combined,list(dat_dict.keys())
 
 

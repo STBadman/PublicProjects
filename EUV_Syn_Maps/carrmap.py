@@ -15,7 +15,8 @@ import warnings,pickle
 
 ### Define function to repeat this work with the mapping:
 # Input: sunpy.map.Map instance -> [carrington lons,carrington lats, interpolated map data]
-def get_carr_map(sunpymap,nlon=720,nlat=360,interp_mode="linear",resample_size=None) :
+def get_carr_map(sunpymap,nlon=720,nlat=360,interp_mode="linear",
+				 resample_size=None,crop=60) :
 	if not isinstance(sunpymap,sunpy.map.map_factory.GenericMap) : return "Input must be sunpy map instance (sunpy.map.map_factory.GenericMap)"
 	
 	# Crop to full disk
@@ -91,25 +92,25 @@ def get_carr_map(sunpymap,nlon=720,nlat=360,interp_mode="linear",resample_size=N
 	
 	# Throw away data greater than 60 deg from lon center
 	M0_carr = (M0+L0)%360
-	if (M0_carr-60 >= 0) and (M0_carr + 60 <= 360) : 
-		naninds = np.where((lon_corrected < M0_carr-60)
-							| (lon_corrected > M0_carr+60)
+	if (M0_carr-crop >= 0) and (M0_carr + crop <= 360) : 
+		naninds = np.where((lon_corrected < M0_carr-crop)
+							| (lon_corrected > M0_carr+crop)
 						  )[0]
 	else :
-		naninds = np.where((lon_corrected > ((M0_carr+60) % 360))
-							& (lon_corrected < ((M0_carr-60)%360))
+		naninds = np.where((lon_corrected > ((M0_carr+crop) % 360))
+							& (lon_corrected < ((M0_carr-crop)%360))
 						  )[0]
 	map_interp[:,naninds]=np.nan
 	
 	return lon_corrected,np.degrees(lat_interp),map_interp
 
 def plot_carr_map(lons,lats,values,sunpymaps=None,pcmax=90,pcmin=0,
-				  cmap='sdoaia193',figax=None,sinelat=False):
+				  cmap='sdoaia193',figax=None,sinlat=False):
 	#Plot
 	if sunpymaps is not None : date_obs=sunpymaps[0].observer_coordinate.frame.obstime.value
 	if figax is None : fig,ax=plt.subplots(figsize=(20,10))
 	else : fig,ax=figax
-	if sinelat : 
+	if sinlat : 
 		ax.pcolormesh(lons,np.sin(np.radians(lats)),values,vmin=np.nanpercentile(values,pcmin),
 					   vmax=np.nanpercentile(values,pcmax),cmap=cmap)
 		ax.set_aspect(90)
@@ -119,12 +120,12 @@ def plot_carr_map(lons,lats,values,sunpymaps=None,pcmax=90,pcmin=0,
 						vmax=np.nanpercentile(values,pcmax),cmap=cmap)
 		ax.set_aspect(1)
 		ax.set_ylabel("Carrington Latitude / Deg",fontsize=18)
-		plt.yticks(np.arange(-90,90,15))
+		ax.set_yticks(np.arange(-90,91,30))
 	ax.set_xlabel("Carrington Longitude / Deg",fontsize=18)
 	
 	
-	plt.xticks(np.arange(0,360,15))
-	plt.grid()
+	ax.set_xticks(np.arange(0,361,30))
+	ax.grid(which="major")
 
 	if sunpymaps is not None :ax.set_title(f"{date_obs} {[(sunpymap.observatory,sunpymap.instrument) for sunpymap in sunpymaps]}",fontsize=18)
 	if figax is None : plt.show()
@@ -191,7 +192,7 @@ def front_end(dt,resample_size=512,save=False) :
 		int_init += 1
 		
 	ax_carr = plt.subplot(212)
-	plot_carr_map(lon,lat,combined,maps,pcmax=90,figax=(fig,ax_carr),sinelat=False)
+	plot_carr_map(lon,lat,combined,maps,pcmax=90,figax=(fig,ax_carr),sinlat=False)
 	plt.yticks(np.arange(-90,90,15))
 	plt.xticks(np.arange(0,360,15))
 	plt.grid()
@@ -227,21 +228,22 @@ def save_dat_over_date_range(dt_start,dt_end,interval_days=1,sav_def = "./data/"
 			datas[dt]=combined
 		except : print(f"No map generated for : {dt}") 
 		dt +=timedelta(days=interval_days) 
-	pickle.dump((lon,lat,datas),file=open(f"{sav_def}{str(dt_start)[0:10]}_{str(dt_end)[0:10]}_{interval_days}.pkl","wb"))
+	filename = f"{sav_def}{str(dt_start)[0:10]}_{str(dt_end)[0:10]}_{interval_days}.pkl"
+	pickle.dump((lon,lat,datas),file=open(filename,"wb"))
+	return filename
 
-def combine_map(pickle_file,path="./data/",
+def combine_map(pickle_file,path="./data/",pcmin=5,pcmax=90,figax=None,ret_all=False,
 				mode=np.nanmin,plot=False,ret=False,cmap='sdoaia193',sinelat=True) :	
 	lon,lat,dat_dict=pickle.load(open(f"{path}{pickle_file}","rb"))
 	times = list(dat_dict.keys())
 	data_stack=np.array(list(dat_dict.values()))
 	combined = mode(data_stack,axis=0)
 	if plot :
-		fig,ax=plt.subplots(figsize=(20,10))
-		plot_carr_map(lon,lat,mode(data_stack,axis=0),pcmax=90,sinelat=sinelat,
-					  cmap=cmap,figax=(fig,ax))
-		plt.title(f"{len(times)} maps from {str(times[0])[0:10]} to {str(times[0])[0:10]}",fontsize=20)
-		plt.show()
+		if figax is None : figax=plt.subplots(figsize=(20,10))
+		plot_carr_map(lon,lat,mode(data_stack,axis=0),pcmin=pcmin,
+		              pcmax=pcmax,sinelat=sinelat,
+					  cmap=cmap,figax=figax)
+		figax[1].set_title(f"{len(times)} maps from {str(times[0])[0:10]} to {str(times[-1])[0:10]}",fontsize=20)
+		#plt.show()
 	if ret : return lon,lat,combined,list(dat_dict.keys())
-
-
-
+	elif ret_all : return lon,lat,data_stack,list(dat_dict.keys())

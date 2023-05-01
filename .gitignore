@@ -1,0 +1,7 @@
+*.mp4
+*.gif
+*.fts.gz
+*.pyc
+*.ipynb_checkpoints/
+*.pyc
+Visualizations/.ipynb_checkpoints/
